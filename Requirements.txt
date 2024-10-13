@@ -1,3 +1,5 @@
-streamlit==1.25.0  # Or the latest version available
-pandas==2.1.1      # Or the latest version available
-matplotlib==3.8.0  # Or the latest version available
+streamlit
+matplotlib
+pandas
+seaborn
+plotly
