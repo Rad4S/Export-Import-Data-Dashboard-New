@@ -1,104 +1,105 @@
+# Required Libraries
 import pandas as pd
+import seaborn as sns
 import streamlit as st
 import matplotlib.pyplot as plt
 import plotly.express as px
 
-# Cache the dataset loading to avoid reloading every time
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_csv('Imports_Exports_Dataset.csv')
-        df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y', errors='coerce')
-        df['Year'] = df['Date'].dt.year
-        return df.dropna(subset=['Date', 'Year'])
-    except FileNotFoundError:
-        st.error("Dataset not found. Please upload the 'Imports_Exports_Dataset.csv' file.")
-        return pd.DataFrame()
-
-# Load data
-df = load_data()
-
-if df.empty:
-    st.stop()  # Stop if no data
-
-# Sample data for performance
-df_sample = df.sample(n=min(3000, len(df)), random_state=42)
+# Load the dataset
+data = pd.read_csv("Imports_Exports_Dataset.csv")
 
 # Sidebar filters
 st.sidebar.title("Filters")
-categories = df_sample['Category'].unique()
-selected_categories = st.sidebar.multiselect("Select Categories", categories, default=categories)
 
-import_export_options = df_sample['Import_Export'].unique()
-selected_import_export = st.sidebar.multiselect("Select Import/Export", import_export_options, default=import_export_options)
+# Sampling for performance
+sample = data.sample(n=3000, random_state=42)
 
-years = sorted(df_sample['Year'].unique())
-selected_years = st.sidebar.multiselect("Select Years", years, default=years)
+# Category filter
+categories = sample['Category'].unique()
+selected_categories = st.sidebar.multiselect("Select Categories", options=categories, default=categories)
+
+# Import/Export filter
+import_export_options = sample['Import_Export'].unique()
+selected_import_export = st.sidebar.multiselect("Select Import/Export", options=import_export_options, default=import_export_options)
+
+# Date filter: Extract Year
+sample['Date'] = pd.to_datetime(sample['Date'], format='%d-%m-%Y', errors='coerce')
+sample['Year'] = sample['Date'].dt.year
+years = sample['Year'].dropna().unique()
+selected_years = st.sidebar.multiselect("Select Years", options=years, default=years)
 
 # Filter the data
-filtered_df = df_sample[
-    df_sample['Category'].isin(selected_categories) &
-    df_sample['Import_Export'].isin(selected_import_export) &
-    df_sample['Year'].isin(selected_years)
+filtered_data = sample[
+    (sample['Category'].isin(selected_categories)) &
+    (sample['Import_Export'].isin(selected_import_export)) &
+    (sample['Year'].isin(selected_years))
 ]
 
-# Title
-st.title("Imports and Exports Dashboard")
+# Ensure data is available after filtering
+if not filtered_data.empty:
+    # Scatter Plot: Quantity vs Value
+    st.subheader("1. Scatter Plot of Quantity vs. Value")
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(x='Quantity', y='Value', data=filtered_data, color='red')
+    plt.title('Scatter Plot of Quantity vs. Value')
+    plt.xlabel('Quantity')
+    plt.ylabel('Value')
+    st.pyplot(plt)
 
-if filtered_df.empty:
-    st.warning("No data available for the selected filters.")
-    st.stop()
+    # Pie Chart: Percentage of High-Value Transactions
+    st.subheader("2. Percentage of High-Value Transactions")
+    high_value = filtered_data[filtered_data['Value'] >= filtered_data['Value'].quantile(0.90)]
+    percentage = len(high_value) / len(filtered_data) * 100
 
-# 1. Scatter Plot
-st.subheader('1. Scatter Plot: Quantity vs. Value')
-fig, ax = plt.subplots(figsize=(8, 6))
-sns.scatterplot(data=filtered_df, x='Quantity', y='Value', ax=ax, color='blue')
-ax.set_title('Scatter Plot of Quantity vs. Value')
-st.pyplot(fig)
-
-# 2. Pie Chart
-high_value = filtered_df['Value'] >= filtered_df['Value'].quantile(0.90)
-percentage_high_value = high_value.mean() * 100
-
-st.subheader('2. High-Value Transactions (%)')
-fig, ax = plt.subplots()
-ax.pie([percentage_high_value, 100 - percentage_high_value],
-       labels=['High Value', 'Others'], autopct='%1.1f%%', startangle=90,
-       colors=['#800080', '#FFC0CB'])
-ax.set_title('Percentage of High-Value Transactions')
-st.pyplot(fig)
-
-# 3. Bar Plot
-if 'Shipping_Method' in filtered_df.columns:
-    st.subheader('3. Bar Plot: Shipping Methods')
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.countplot(data=filtered_df, x='Shipping_Method', ax=ax, color='red')
-    ax.set_title('Bar Plot of Shipping Methods')
-    plt.xticks(rotation=45)
+    fig, ax = plt.subplots()
+    ax.pie([percentage, 100 - percentage], labels=['High Value', 'Others'], autopct='%1.1f%%',
+           startangle=90, colors=['#800080', '#FFC0CB'])
+    plt.title('Percentage of High-Value Transactions')
+    plt.axis('equal')
     st.pyplot(fig)
 
-# 4. Histogram
-st.subheader('4. Histogram: Transaction Value Distribution')
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.histplot(filtered_df['Value'], bins=30, kde=True, ax=ax, color='red', alpha=0.7)
-sns.histplot(filtered_df['Value'], bins=30, kde=True, ax=ax, color='lightblue', alpha=0.3)
-ax.set_title('Transaction Value Distribution')
-st.pyplot(fig)
+    # Bar Plot: Frequency of Shipping Methods
+    st.subheader("3. Bar Plot of Shipping Methods")
+    plt.figure(figsize=(8, 6))
+    sns.countplot(x='Shipping_Method', data=filtered_data, color='brown')
+    plt.title('Bar Plot of Shipping Methods')
+    plt.xlabel('Shipping Method')
+    plt.ylabel('Count')
+    plt.xticks(rotation=45)
+    st.pyplot(plt)
 
-# 5. Box Plot
-st.subheader('5. Box Plot: Weight by Category')
-fig, ax = plt.subplots(figsize=(12, 6))
-sns.boxplot(data=filtered_df, x='Category', y='Weight', ax=ax, palette='pastel')
-ax.set_title('Weight Distribution per Product Category')
-plt.xticks(rotation=45)
-st.pyplot(fig)
+    # Histogram: Transaction Value Distribution
+    st.subheader("4. Transaction Value Distribution")
+    plt.figure(figsize=(10, 6))
+    sns.histplot(filtered_data['Value'], bins=30, kde=True, color='yellow', alpha=0.7)
+    sns.histplot(filtered_data['Value'], bins=30, kde=True, color='orange', alpha=0.3)
+    plt.title('Transaction Value Distribution')
+    plt.xlabel('Transaction Value')
+    plt.ylabel('Frequency')
+    st.pyplot(plt)
 
-# 6. Line Plot
-filtered_df = filtered_df.assign(Month=filtered_df['Date'].dt.month)
-monthly_transactions = filtered_df.groupby('Month')['Value'].sum().reset_index()
+    # Box Plot: Weight Distribution per Product Category
+    st.subheader("5. Weight Distribution per Product Category")
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(x='Category', y='Weight', data=filtered_data, palette='pastel')
+    plt.title('Weight Distribution per Product Category')
+    plt.xlabel('Category')
+    plt.ylabel('Weight')
+    plt.xticks(rotation=45)
+    st.pyplot(plt)
 
-st.subheader('6. Monthly Transaction Trends')
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.lineplot(data=monthly_transactions, x='Month', y='Value', ax=ax, color='pink', linewidth=2)
-ax.set_title('Monthly Transaction Trends')
-st.pyplot(fig)
+    # Line Plot: Monthly Transaction Trends
+    st.subheader("6. Monthly Transaction Trends")
+    filtered_data['Month'] = filtered_data['Date'].dt.month
+    monthly_data = filtered_data.groupby('Month')['Value'].sum().reset_index()
+
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(x='Month', y='Value', data=monthly_data, color='#D8BFD8', linewidth=2)
+    plt.title('Monthly Transaction Trends')
+    plt.xlabel('Month')
+    plt.ylabel('Total Value')
+    plt.xticks(rotation=0)
+    st.pyplot(plt)
+
+else:
+    st.warning("No data available for the selected filters. Please adjust your filters.")
